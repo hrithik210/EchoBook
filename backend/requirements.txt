@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+pypdf
+pydub
+ffmpeg-python
+melo
+torch
+torchaudio
