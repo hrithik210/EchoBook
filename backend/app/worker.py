@@ -1,6 +1,4 @@
-import enum
 import os
-import re
 import uuid
 from pathlib import Path
 from pypdf import PdfReader
@@ -10,12 +8,21 @@ from dotenv import load_dotenv
 import requests
 load_dotenv()
 
-Resemble.api_key(os.getenv("RESEMBLE_API"))
-# Get your default Resemble project.
-project_uuid = Resemble.v2.projects.all(1, 10)['items'][0]['uuid']
+# Check for required environment variables
+resemble_api_key = os.getenv("RESEMBLE_API")
+if not resemble_api_key:
+    raise ValueError("RESEMBLE_API environment variable is required")
 
-# Get your Voice uuid. In this example, we'll obtain the first.
-default_voice_uuid = Resemble.v2.voices.all(1, 10)['items'][0]['uuid']
+Resemble.api_key(resemble_api_key)
+
+try:
+    # Get your default Resemble project.
+    project_uuid = Resemble.v2.projects.all(1, 10)['items'][0]['uuid']
+    
+    # Get your Voice uuid. In this example, we'll obtain the first.
+    default_voice_uuid = Resemble.v2.voices.all(1, 10)['items'][0]['uuid']
+except Exception as e:
+    raise ValueError(f"Failed to initialize Resemble API: {e}")
 
 def text_to_speech(text : str , output_path : str ,voice_uuid : str = default_voice_uuid):
     print(f"🗣️  TTS: '{text[:50]}...'")
