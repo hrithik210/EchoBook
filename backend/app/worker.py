@@ -76,7 +76,9 @@ def process_pdf_to_audioBook(pdf_path : str , output_dir : str , voice_uuid : st
     
     return str(mp3_path)
 
+# Define pdf_path at module level so it can be imported
+pdf_path = "/Users/hrithik/audoBook-generator/test.pdf"   # replace with your PDF path
+
 if __name__ == "__main__":
-    pdf_path = "/Users/hrithik/audoBook-generator/create a one pager pdf of a anime novel including.pdf"   # replace with your PDF path
     output_dir = "output"
     process_pdf_to_audioBook(pdf_path, output_dir)

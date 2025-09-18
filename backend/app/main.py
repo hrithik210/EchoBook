@@ -11,7 +11,7 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import HttpUrl
-from .worker import default_voice_uuid, pdf_path, process_pdf_to_audioBook
+from app.worker import default_voice_uuid, pdf_path, process_pdf_to_audioBook
 
 
 app = FastAPI(title="EchoBook_backend")
@@ -97,8 +97,8 @@ async def download_audio(job_id : str):
 
 @app.get("/voices")
 def list_voices():
-    from .worker import project_uuid
+    from app.worker import project_uuid
     from resemble import Resemble
 
-    voices = Resemble.v2.voices.all(project_uuid, 1, 20)
+    voices = Resemble.v2.voices.all(1, 20)
     return {"voices": voices['items']}
