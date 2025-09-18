@@ -1,5 +1,7 @@
 from email import message
 import os
+import stat
+from turtle import ht
 import uuid
 from pathlib import Path
 from typing import Dict
@@ -7,6 +9,8 @@ from fastapi import FastAPI,UploadFile,File,Form,HTTPException
 from fastapi.responses import FileResponse
 import shutil
 from concurrent.futures import ThreadPoolExecutor
+
+from pydantic import HttpUrl
 from .worker import default_voice_uuid, pdf_path, process_pdf_to_audioBook
 
 
@@ -64,4 +68,29 @@ async def backgroud_process(pdf_path:str , output_dir : str, voice_uuid , job_id
         }
         print(f"❌ Job {job_id} failed: {e}")
         
+@app.get("/status/{job_id}")
+async def getStatus(job_id:str):
+    job = jobs.get(job_id)
     
+    if not job:
+        raise HTTPException(f"job not found")
+    
+    return job
+
+@app.get("/download/{job_id}")
+async def download_audio(job_id : str):
+    
+    job  = jobs[job_id]
+    
+    if not job:
+        return HTTPException(status_code=404 , detail="job not found")
+    
+    if job['status'] != "done":
+        return HTTPException(status_code=400 , detail="job is still in processing")
+    
+    mp3_path = job['output_path']
+    
+    if not os.path.exists(mp3_path):
+        return HTTPException(status_code=404 , detail="file missing")
+    
+    return FileResponse(mp3_path, filename="audio_book.mp3" , status_code=200)
