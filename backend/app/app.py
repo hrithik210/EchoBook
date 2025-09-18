@@ -94,3 +94,11 @@ async def download_audio(job_id : str):
         return HTTPException(status_code=404 , detail="file missing")
     
     return FileResponse(mp3_path, filename="audio_book.mp3" , status_code=200)
+
+@app.get("/voices")
+def list_voices():
+    from .worker import project_uuid
+    from resemble import Resemble
+
+    voices = Resemble.v2.voices.all(project_uuid, 1, 20)
+    return {"voices": voices['items']}
