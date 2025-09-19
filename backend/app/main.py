@@ -1,5 +1,4 @@
 import os
-from tkinter import RAISED
 import uuid
 from pathlib import Path
 from typing import Dict
@@ -7,10 +6,10 @@ from fastapi import FastAPI,UploadFile,File,Form,HTTPException, status
 from fastapi.responses import FileResponse
 import shutil
 from concurrent.futures import ThreadPoolExecutor
-
+from pydub import AudioSegment
 from resemble import Resemble
-from app.worker import default_voice_uuid, pdf_path, process_pdf_to_audioBook
-
+from app.worker import default_voice_uuid, pdf_path, process_pdf_to_audioBook, project_uuid
+from tempfile import NamedTemporaryFile
 
 app = FastAPI(title="EchoBook_backend")
 
@@ -107,11 +106,30 @@ def list_voices():
     return {"voices": voices['items']}
 
 
+def convert_to_wav_if_needed(input_path: str) -> str:
+    """
+    If file is not .wav, convert it to 16-bit PCM WAV at 22050 Hz.
+    Returns path to WAV file (original or converted).
+    """
+    if input_path.lower().endswith(".wav"):
+        print("✅ File is already .wav")
+        return input_path
 
-def createEmptyVoice(project_uuid : str , name : str):
+    # Convert using pydub
+    print(f"🔄 Converting {input_path} to .wav...")
+    audio = AudioSegment.from_file(input_path)
+
+    # Export as 16-bit PCM WAV at 22050 Hz (Resemble-friendly)
+    wav_path = input_path.rsplit(".", 1)[0] + ".wav"
+    audio.export(wav_path, format="wav", parameters=["-ar", "22050", "-ac", "1", "-sample_fmt", "s16"])
+
+    print(f"✅ Converted and saved to: {wav_path}")
+    return wav_path
+
+def createEmptyVoice(project_uuid: str, name : str):
     response = Resemble.v2.voices.create(
-        project_uuid,
-        name=name,
+        name,
+        consent="I agree to the terms of service",
         voice_type="rapid"
     )
 
@@ -122,8 +140,9 @@ def createEmptyVoice(project_uuid : str , name : str):
     
     return voice_uuid
 
-def upload_Recording_to_voice(project_uuid : str , name: str , audio_file_Path : str , voice_uuid : str):
+def upload_Recording_to_voice(project_uuid : str, name: str , audio_file_Path : str , voice_uuid : str):
     response = Resemble.v2.recordings.create(
+        project_uuid,
         voice_uuid=voice_uuid,
         file=audio_file_Path,
         name=name,
@@ -133,14 +152,63 @@ def upload_Recording_to_voice(project_uuid : str , name: str , audio_file_Path :
     recording_uuid = response['item']['uuid']
     print(f"✅ Recording uploaded: {recording_uuid}")
     return recording_uuid
+
+def start_voice_training(project_uuid: str , voice_uuid : str):
+    response = Resemble.v2.voices.build(
+        project_uuid,
+        uuid=voice_uuid
+    )
+    if not response['success']:
+        raise Exception(f"Failed to start training: {response}")
+
+    print(f"✅ Training started for voice: {voice_uuid}")
     
+    
+def clone_voice_from_file(project_uuid,voice_name :str , audio_path: str):
+    
+    wav_path = convert_to_wav_if_needed(audio_path)
+    #step:1 create empty file
+    voice_uuid = createEmptyVoice(project_uuid, name=voice_name)
+    
+    #step:2 upload the same file 3 time
+    for i in range(3):
+        upload_Recording_to_voice(
+            project_uuid,
+            name=voice_name,
+            audio_file_Path=wav_path,
+            voice_uuid=voice_uuid
+        )
+    #step3 : building voice
+    start_voice_training(project_uuid, voice_uuid=voice_uuid)
+    
+    return voice_uuid
+
+
+
 @app.post("/clone-voice")
 async def cloneVoice(name : str = Form(...) , sample : UploadFile = File(...)):
     '''upload a voice sample here it clones the voice and returns voice uuid'''
     
-    if not sample.filename.endswith("wav", "mp3", "ogg"):
+    if not sample.filename.endswith((".wav", ".mp3", ".ogg")):
         raise HTTPException(status=400 , detail="invalid upload voice format")
     
-    try:
-        response = Resemble.v2
+    # Save uploaded file temporarily
+    with NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+        shutil.copyfileobj(sample.file, tmp)
+        tmp_path = tmp.name
     
+
+    
+    try:
+        voice_uuid = clone_voice_from_file(project_uuid=project_uuid,voice_name=name , audio_path=tmp_path )
+    except Exception as e:
+        raise HTTPException(500, f"Voice cloning failed: {str(e)}")
+    finally:
+        os.unlink(tmp_path)
+    
+    return {
+        "message": "Voice cloning started. Training may take 30-60 seconds.",
+        "voice_uuid": voice_uuid,
+        "name": name,
+        "status": "training"
+    }
