@@ -1,13 +1,14 @@
 import os
+from tkinter import RAISED
 import uuid
 from pathlib import Path
 from typing import Dict
-from fastapi import FastAPI,UploadFile,File,Form,HTTPException
+from fastapi import FastAPI,UploadFile,File,Form,HTTPException, status
 from fastapi.responses import FileResponse
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 
-from pydantic import HttpUrl
+from resemble import Resemble
 from app.worker import default_voice_uuid, pdf_path, process_pdf_to_audioBook
 
 
@@ -104,3 +105,30 @@ def list_voices():
 
     voices = Resemble.v2.voices.all(1, 20)
     return {"voices": voices['items']}
+
+
+
+def createEmptyVoice(project_uuid : str , name : str):
+    response = Resemble.v2.voices.create(
+        project_uuid,
+        name=name,
+        voice_type="rapid"
+    )
+
+    if not response['success']:
+        raise HTTPException(status_code=400 , detail=f"failed to create voice : {response}")
+    voice_uuid = response['item']['uuid']
+    print(f"voice container created successfully  :{voice_uuid}")
+    
+    return voice_uuid
+
+@app.post("/clone-voice")
+async def cloneVoice(name : str = Form(...) , sample : UploadFile = File(...)):
+    '''upload a voice sample here it clones the voice and returns voice uuid'''
+    
+    if not sample.filename.endswith("wav", "mp3", "ogg"):
+        raise HTTPException(status=400 , detail="invalid upload voice format")
+    
+    try:
+        response = Resemble.v2
+    
