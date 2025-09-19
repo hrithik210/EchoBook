@@ -122,6 +122,18 @@ def createEmptyVoice(project_uuid : str , name : str):
     
     return voice_uuid
 
+def upload_Recording_to_voice(project_uuid : str , name: str , audio_file_Path : str , voice_uuid : str):
+    response = Resemble.v2.recordings.create(
+        voice_uuid=voice_uuid,
+        file=audio_file_Path,
+        name=name,
+    )
+    if not response['success']:
+        raise Exception(f"Failed to upload recording: {response}")
+    recording_uuid = response['item']['uuid']
+    print(f"✅ Recording uploaded: {recording_uuid}")
+    return recording_uuid
+    
 @app.post("/clone-voice")
 async def cloneVoice(name : str = Form(...) , sample : UploadFile = File(...)):
     '''upload a voice sample here it clones the voice and returns voice uuid'''
